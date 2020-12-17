@@ -1,13 +1,13 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Copyright @ 2019, Laura Valtonen, Sampo Saari and Sampsa Pursiainen
-
-This script demonstrates inverting cascade impactor measurements via 
-a fixed-point and L1-regularized iterative alternating sequential (IAS) 
-approach. 
-
-For plotting the results this script requires the IoSR Matlab Toolbox 
-(Copyright (c) 2016 Institute of Sound Recording) available at:
-https://github.com/IoSR-Surrey/MatlabToolbox
+%Copyright @ 2019, Laura Valtonen, Sampo Saari and Sampsa Pursiainen
+%
+%This script demonstrates inverting cascade impactor measurements via 
+%a fixed-point and L1-regularized iterative alternating sequential (IAS) 
+%approach. 
+%
+%For plotting the results this script requires the IoSR Matlab Toolbox 
+%(Copyright (c) 2016 Institute of Sound Recording) available at:
+%https://github.com/IoSR-Surrey/MatlabToolbox
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 clear
