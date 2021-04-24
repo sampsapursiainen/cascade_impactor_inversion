@@ -18,13 +18,13 @@ import iosr.statistics.*
 kernel_type = 1;
 
 %Set other parameter values.
-L1_reg_param=1e-8;
+L1_reg_param=1E-8;
 L1_eps_val = 1e-4;
-sample_size = 100;
+sample_size = 500;
 noise = [0.01:0.005:0.03];
 n_iterations = 20;
 n_kernels = 12;
-n_test = 6;
+n_test = 7;
 
 time_fp_ker = zeros(length(noise),sample_size,n_test);
 time_fp_pnt = zeros(length(noise),sample_size,n_test);
@@ -44,6 +44,7 @@ f(i,:) = kernel_cell{i};
 %Conversion to mass concentration
 f(i,:) = f(i,:).*s_exp.^3*1/6*pi();
 end
+
 else
 
 %Set s-axis
@@ -66,6 +67,7 @@ end
 
 f_norm = max(f');
 f = (f'./repmat(max(f'),size(f,2),1))';
+f_orig = f;
 
 %Kernels normalized to one everywhere.
 F=sum(f);
@@ -75,20 +77,22 @@ end
 f_0 = f;
 
 %Plot kernels
-figure(4); h = semilogx(s_exp,f'); title('Kernel functions normalized to one');
+figure(4); h = semilogx(s_exp,f_orig'); title('Kernel functions normalized to one');
 set(h,'linewidth',2);
 set(gca,'xlim',[exp(s_1) exp(s_2)]);
 set(gca,'ylim',[0 1.05]);
 set(gca,'fontsize',14);
 set(gca,'linewidth',1);
 set(4,'renderer','painters');
+pbaspect([2 1 1]);
 print(4,'-r200','-dpng','normalized_kernels_1.png');
-figure(5); h = semilogx(s_exp,f'); title('Modified kernel functions summing up to one everywhere');
+figure(5); h = semilogx(s_exp,f'); title('The sum of the kernel functions set to one');
 set(h,'linewidth',2);
 set(gca,'xlim',[exp(s_1) exp(s_2)]);
 set(gca,'ylim',[0 1.05]);
 set(gca,'fontsize',14);
 set(gca,'linewidth',1);
+pbaspect([2 1 1]);
 set(5,'renderer','painters');
 print(5,'-r200','-dpng','normalized_kernels_3.png')
 
@@ -97,10 +101,11 @@ g=zeros(n_test,length(s));
 sigma_val = 1.23; 
 C_scale = 5.11E4;
 peak_val = [0.008 0.02 0.1 0.3 0.8 9];
-for i = 1 : length(peak_val)
+for i = 1 : n_test-1
 g(i,:)=C_scale./(sqrt(2*pi())*log(sigma_val)).*exp(-0.5*((s-log(peak_val(i))).^2)./log(sigma_val).^2);
 g(i,:)=1/6*pi()*g(i,:).*s_exp.^3; 
 end
+g(n_test,:) = sum([0; 1000; 3; 1; 0.05; 0]/1000.*g(1:n_test-1,:),1);
 
 
 %L1-inversion, kernel basis
@@ -157,21 +162,42 @@ for n=1:n_test
     
     data=[];
 
-%Simulated data
+%Simulated data within a refined lattice 
 y = zeros(size(f,1),1); 
-for i = 1 : size(y,1)
-    y(i) = sum((s(2:end)-s(1:end-1)).*g(n,2:end).*(f_0(i,2:end)));
+s_interp = interp1(s,s,linspace(min(s),max(s),3*length(s)),'spline');
+g_interp = zeros(size(g,1),3*size(g,2));
+f_0_interp = zeros(size(f_0,1),3*size(f_0,2));
+for i = 1 : size(g,1)
+g_interp(i,:) = interp1(s,g(i,:),linspace(min(s),max(s),3*length(s)),'spline');
 end
+for i = 1 : size(f_0,1)
+f_0_interp(i,:) = interp1(s,f_0(i,:),linspace(min(s),max(s),3*length(s)),'spline');
+end
+for i = 1 : size(y,1)
+    y(i) = sum((s_interp(2:end)-s_interp(1:end-1)).*g_interp(n,2:end).*(f_0_interp(i,2:end)));
+end  
 
 y_aux = y; 
 
+100*[round(noise,4)  ; round(max(y_aux).*noise.*sqrt(length(y_aux))/norm(y_aux),4)]
+  
+
 y_data = zeros(sample_size,5,4); 
+
+L1_ker_mat = zeros(sample_size,size(f,2),length(noise)); 
+L1_pnt_mat = zeros(sample_size,size(f,2),length(noise));
+fixed_point_ker_mat = zeros(sample_size,size(f,2),length(noise)); 
+fixed_point_pnt_mat = zeros(sample_size,size(f,2),length(noise)); 
+
 for ell = 1 : length(noise)
+    
 
 for iter_ind_aux = 1 : sample_size
 
+noise_vec = max(y_aux).*noise(ell).*randn(size(y_aux));     
+y = y_aux + noise_vec;   
 %IAS iteration, kernel-based
-y = y_aux + max(y_aux).*noise(ell).*randn(size(y_aux));
+
 tic;
 
 x = zeros(12,1);
@@ -194,6 +220,7 @@ for i = 1 : size(f,1)
 end
 
 L1_ker=z;
+L1_ker_mat(iter_ind_aux,:,ell) = z;
 time_L1_ker(ell,iter_ind_aux,n) = time_val;
 norm_L1_ker_1(ell, iter_ind_aux, n) = sum((s(2:end)-s(1:end-1)).*abs(z(2:end) - g(n,2:end)))./sum((s(2:end)-s(1:end-1)).*abs(g(n,2:end)));
 norm_L1_ker_inf(ell, iter_ind_aux, n) = max(abs(z - g(n,:)))./max(abs(g(n,:)));
@@ -217,6 +244,7 @@ end
 time_val = toc;
 z = x';
 L1_pnt=z;
+L1_pnt_mat(iter_ind_aux,:,ell) = z;
 time_L1_pnt(ell,iter_ind_aux,n) = time_val;
 norm_L1_pnt_1(ell, iter_ind_aux, n) = sum((s(2:end)-s(1:end-1)).*abs(z(2:end) - g(n,2:end)))./sum((s(2:end)-s(1:end-1)).*abs(g(n,2:end)));
 norm_L1_pnt_inf(ell, iter_ind_aux, n) = max(abs(z - g(n,:)))./max(abs(g(n,:)));
@@ -248,6 +276,7 @@ end
 time_val = toc;
 z = x';
 fixed_point_pnt = z;
+fixed_point_pnt_mat(iter_ind_aux,:,ell) = z;
 time_fp_pnt(ell,iter_ind_aux,n) = time_val;
 norm_fp_pnt_1(ell,iter_ind_aux,n) = sum((s(2:end)-s(1:end-1)).*abs(z(2:end) - g(n,2:end)))./sum((s(2:end)-s(1:end-1)).*abs(g(n,2:end)));
 norm_fp_pnt_inf(ell,iter_ind_aux,n) = max(abs(z - g(n,:)))./max(abs(g(n,:)));
@@ -276,6 +305,7 @@ for i = 1 : size(f,1)
 end
 
 fixed_point_ker = z;
+fixed_point_ker_mat(iter_ind_aux,:,ell) = z;
 time_fp_ker(ell,iter_ind_aux,n) = time_val;
 norm_fp_ker_1(ell,iter_ind_aux,n) = sum((s(2:end)-s(1:end-1)).*abs(z(2:end) - g(n,2:end)))./sum((s(2:end)-s(1:end-1)).*abs(g(n,2:end)));
 norm_fp_ker_inf(ell,iter_ind_aux,n) = max(abs(z - g(n,:)))./max(abs(g(n,:)));
@@ -285,13 +315,22 @@ end
 %Plot reconstructed distributions
 if ell == 2
 figure(1); clf; set(gcf,'renderer','painters');
-semilogx(s_exp, g(n,:),'-','color',0.75*[1 1 1], 'linewidth',7);
+semilogx(s_exp, g(n,:),'-','color',0.7*[1 1 1], 'linewidth',3);
 hold on
-semilogx(s_exp, fixed_point_ker,'-','color',0.9*[0 1 1], 'linewidth',2);
-semilogx(s_exp, fixed_point_pnt,'-.','color',0.7*[0 1 0], 'linewidth',4);
-semilogx(s_exp, L1_ker,'-.','color',0.8*[1 0 1], 'linewidth',2);
-semilogx(s_exp, L1_pnt,':','color',0*[1 1 1], 'linewidth',2);
-legend('Original','FP_{ker}','FP_{pnt}','L1_{ker}','L1_{pnt}','location','northeastoutside','orientation','vertical')
+ pbaspect([1 1 1])
+h_fill = fill([s_exp fliplr(s_exp)], [quantile(L1_pnt_mat(:,:,ell),0.1) fliplr(quantile(L1_pnt_mat(:,:,ell),0.9))],0*[1 1 1]);
+set(h_fill,'edgecolor','none','facealpha',0.7);
+h_fill = fill([s_exp fliplr(s_exp)], [quantile(L1_ker_mat(:,:,ell),0.1) fliplr(quantile(L1_ker_mat(:,:,ell),0.9))],0.8*[1 0 1]);
+set(h_fill,'edgecolor','none','facealpha',0.7);
+h_fill = fill([s_exp fliplr(s_exp)], [quantile(fixed_point_pnt_mat(:,:,ell),0.1) fliplr(quantile(fixed_point_pnt_mat(:,:,ell),0.9))],0.7*[0 1 0]);
+set(h_fill,'edgecolor','none','facealpha',0.7);
+h_fill = fill([s_exp fliplr(s_exp)], [quantile(fixed_point_ker_mat(:,:,ell),0.1) fliplr(quantile(fixed_point_ker_mat(:,:,ell),0.9))],0.9*[0 1 1]);
+set(h_fill,'edgecolor','none','facealpha',0.7);
+semilogx(s_exp, g(n,:),'-','color',0.7*[1 1 1], 'linewidth',5);
+set(gca,'fontsize',18)
+
+
+legend('Original','L1_{pnt}','L1_{ker}','FP_{pnt}','FP_{ker}','location','northeastoutside','orientation','vertical')
 xlabel('Particle size (µm)')
 ylabel('Particle concentration (µg/m^3)')
 title(['Simulated distribution ' int2str(n)])
@@ -335,6 +374,8 @@ end
       h_legend = get(gca,'legend');
       set(h_legend,'location','northeastoutside');
       box on
+      pbaspect([1 1 1])
+      set(gca,'fontsize',18)
       ylim('auto')
       ytickformat('percentage')
       xlabel('Noise percentage')
@@ -365,6 +406,8 @@ end
       h_legend = get(gca,'legend');
       set(h_legend,'location','northeastoutside');
       box on
+            pbaspect([1 1 1])
+      set(gca,'fontsize',18)
       ylim('auto')
       ytickformat('percentage')
       xlabel('Noise percentage')
